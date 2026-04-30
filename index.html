@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Vibe Dashboard</title>
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- 좌측 사이드바 -->
+    <aside class="sidebar">
+        <!-- 멀티 시계 위젯 -->
+        <div class="glass-panel time-widget" onclick="openModal('cityModal')" title="클릭하여 국가/도시 변경">
+            <div id="clocksContainer" class="multi-clock-container"></div>
+            <div class="add-city-hint"><i data-lucide="settings" style="width:12px;height:12px;"></i> 시간대 설정</div>
+        </div>
+        
+        <!-- 할 일 위젯 -->
+        <div class="glass-panel" style="flex-grow: 1; display: flex; flex-direction: column;">
+            <div class="todo-header">
+                <i data-lucide="check-square"></i> 오늘의 할 일
+            </div>
+            <div class="todo-input-wrap">
+                <input type="text" id="todoInput" placeholder="할 일 입력 후 엔터..." onkeypress="if(event.key === 'Enter') addTodo()">
+                <button onclick="addTodo()"><i data-lucide="plus"></i></button>
+            </div>
+            <div class="todo-list" id="todoList"></div>
+        </div>
+    </aside>
+
+    <!-- 메인 영역 -->
+    <main class="main-content">
+        <div class="tabs-container" id="tabsNav"></div>
+
+        <div class="tab-actions">
+            <button class="action-btn" onclick="openModal('folderModal')">
+                <i data-lucide="folder-plus"></i> 폴더 생성
+            </button>
+            <button class="action-btn" onclick="openModal('bookmarkModal')">
+                <i data-lucide="bookmark-plus"></i> 북마크 추가
+            </button>
+        </div>
+
+        <!-- 인플레이스 폴더 헤더 -->
+        <div id="folderHeader" class="folder-header" style="display: none;">
+            <button class="btn-back" onclick="goBack()"><i data-lucide="arrow-left"></i> 뒤로</button>
+            <h2 id="folderTitle">폴더 이름</h2>
+        </div>
+
+        <div class="grid-container" id="mainGrid"></div>
+    </main>
+
+    <!-- 우측 퀵 사이드바 (불필요 버튼 삭제) -->
+    <nav class="quick-sidebar">
+        <button class="quick-btn" onclick="window.open('https://chromewebstore.google.com/', '_blank')" title="크롬 웹스토어">
+            <i data-lucide="shopping-bag"></i>
+        </button>
+        <div class="quick-divider"></div>
+        <button class="quick-btn" onclick="toggleTheme()" title="테마 변경" id="themeToggleBtn">
+            <i data-lucide="sun"></i>
+        </button>
+        <button class="quick-btn" onclick="openModal('bgModal')" title="배경 및 설정">
+            <i data-lucide="settings"></i>
+        </button>
+    </nav>
+
+    <!-- 팝업 및 유틸 -->
+    <div id="contextMenu" class="context-menu"></div>
+    <button class="btn-reset" onclick="factoryReset()" title="데이터 초기화"><i data-lucide="refresh-cw" style="width:14px; height:14px;"></i> 데이터 초기화</button>
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- 모달: 폴더 생성 -->
+    <div class="modal-overlay" id="folderModal">
+        <div class="modal">
+            <h2><i data-lucide="folder-plus"></i> 새 폴더 만들기</h2>
+            <div class="input-group">
+                <label>폴더 이름</label>
+                <input type="text" id="folderNameInput" placeholder="예: 프로젝트 자료">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-base btn-cancel" onclick="closeModal('folderModal')">취소</button>
+                <button class="btn-base btn-save" onclick="createFolder()">만들기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모달: 북마크 추가 -->
+    <div class="modal-overlay" id="bookmarkModal">
+        <div class="modal">
+            <h2><i data-lucide="bookmark-plus"></i> 새 북마크 추가</h2>
+            <div class="input-group">
+                <label>사이트 이름</label>
+                <input type="text" id="bmTitleInput" placeholder="예: 구글">
+            </div>
+            <div class="input-group">
+                <label>URL 주소</label>
+                <input type="text" id="bmUrlInput" placeholder="https://" value="https://">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-base btn-cancel" onclick="closeModal('bookmarkModal')">취소</button>
+                <button class="btn-base btn-save" onclick="createBookmark()">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모달: 배경화면 커스텀 -->
+    <div class="modal-overlay" id="bgModal">
+        <div class="modal" style="max-width: 500px;">
+            <h2><i data-lucide="image"></i> 배경화면 커스텀</h2>
+            <div class="input-group" style="margin-top: 1rem;">
+                <label><i data-lucide="upload-cloud" style="width:16px;vertical-align:middle;"></i> 내 PC 이미지 업로드 (최대 2MB)</label>
+                <input type="file" id="bgFileInput" accept="image/*" style="padding: 0.5rem; background: transparent; border: 1px dashed var(--glass-border); cursor: pointer;" onchange="handleFileUpload(event)">
+            </div>
+            <div class="input-group" style="margin-top: 1rem;">
+                <label><i data-lucide="link" style="width:16px;vertical-align:middle;"></i> URL 직접 입력</label>
+                <div style="display:flex; gap:0.5rem;">
+                    <input type="text" id="bgUrlInput" placeholder="https://...">
+                    <button class="btn-base btn-save" onclick="saveBackgroundUrl()">적용</button>
+                </div>
+            </div>
+            <div class="input-group" style="margin-top: 1rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                    <label style="margin:0;"><i data-lucide="star" style="width:16px;vertical-align:middle;"></i> 무제한 갤러리</label>
+                    <button class="action-btn" style="padding:0.3rem 0.6rem; font-size:0.8rem;" onclick="loadNextBgPage()"><i data-lucide="refresh-ccw" style="width:14px;"></i> 새로운 이미지</button>
+                </div>
+                <div class="preset-grid" id="presetBgGrid"></div>
+            </div>
+            <div class="modal-actions" style="border-top: 1px solid var(--glass-border); padding-top: 1rem;">
+                <button class="btn-base btn-cancel" onclick="closeModal('bgModal')">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 모달: 다중 국가 시간대 설정 -->
+    <div class="modal-overlay" id="cityModal">
+        <div class="modal">
+            <h2><i data-lucide="globe"></i> 국가 및 시간대 설정</h2>
+            <p style="font-size: 0.85rem; color: var(--text-sub); margin-bottom: 1rem;">글로벌 환경을 위해 최대 10개의 도시를 추가할 수 있습니다.</p>
+            
+            <div id="dynamicCityContainer" style="max-height: 250px; overflow-y: auto; padding-right: 5px; display: flex; flex-direction: column; gap: 0.5rem;">
+                <!-- JS에서 동적 렌더링 -->
+            </div>
+            
+            <button class="action-btn" onclick="addCitySelectRow()" style="width: 100%; justify-content: center; margin-top: 1rem;" id="btnAddCity">
+                <i data-lucide="plus"></i> 도시 추가
+            </button>
+
+            <div class="modal-actions">
+                <button class="btn-base btn-cancel" onclick="closeModal('cityModal')">취소</button>
+                <button class="btn-base btn-save" onclick="saveCities()">적용</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
