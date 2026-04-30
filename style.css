@@ -13,7 +13,7 @@
     /* 아이콘 & 그리드 사이즈 컨트롤 */
     --grid-min-width: 110px;
     --icon-box-size: 70px;
-    --icon-folder-font: 3rem;
+    --icon-folder-font: 3rem; /* 폴더 아이콘 꽉 차게 기본값 확대 */
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Pretendard Variable", sans-serif; }
@@ -85,10 +85,12 @@ body.light-mode {
 .item-card { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; cursor: pointer; text-decoration: none; color: var(--text-main); transition: transform 0.2s, background 0.2s; position: relative; user-select: none; padding: 0.5rem; border-radius: 1rem; border: 1px solid transparent; }
 .item-card:hover { transform: translateY(-5px); }
 
-/* 꽉 찬 이미지 적용 */
+/* 꽉 찬 이미지 적용을 위한 스타일 업데이트 */
 .icon-box { width: var(--icon-box-size); height: var(--icon-box-size); background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: 1rem; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(5px); transition: 0.3s; font-size: var(--icon-folder-font); overflow: hidden; pointer-events: none; }
 .item-card:hover .icon-box { background: rgba(150,150,150,0.2); border-color: var(--accent); }
 .item-title { font-size: 0.85rem; text-align: center; word-break: break-all; width: 100%; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+
+/* 파비콘 및 커스텀 이미지를 사각틀에 꽉 차게 만듭니다 */
 .favicon-img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; transition: 0.3s; }
 
 .item-card.dragging { opacity: 0.3; transform: scale(0.9); }
