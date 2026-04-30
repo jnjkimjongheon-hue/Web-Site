@@ -1,20 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
 
-  // Your web app's Firebase configuration
-  const firebaseConfig = {
-    apiKey: "AIzaSyAuMFvIwSP7Q6Yv_SIuZ7HmCJ9LcGFDwwo",
-    authDomain: "useful-utilities-e2452.firebaseapp.com",
-    databaseURL: "https://useful-utilities-e2452-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "useful-utilities-e2452",
-    storageBucket: "useful-utilities-e2452.firebasestorage.app",
-    messagingSenderId: "712569672880",
-    appId: "1:712569672880:web:c5d9b32ab3ba3e709d1775"
-  };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
 
 
 /* -----------------------------------------
