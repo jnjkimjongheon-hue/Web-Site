@@ -1,3 +1,22 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyAuMFvIwSP7Q6Yv_SIuZ7HmCJ9LcGFDwwo",
+    authDomain: "useful-utilities-e2452.firebaseapp.com",
+    databaseURL: "https://useful-utilities-e2452-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "useful-utilities-e2452",
+    storageBucket: "useful-utilities-e2452.firebasestorage.app",
+    messagingSenderId: "712569672880",
+    appId: "1:712569672880:web:c5d9b32ab3ba3e709d1775"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+
+
 /* -----------------------------------------
  * 1. 글로벌 데이터 및 상태 모델
  * ----------------------------------------- */
@@ -20,6 +39,7 @@ const CITIES = [
 const DEFAULT_DATA = {
     theme: 'dark', 
     bgUrl: 'https://images.unsplash.com/photo-1542831371-29b0f74f9713?q=80&w=2070&auto=format&fit=crop',
+    iconSize: 'medium', 
     selectedCities: ['ansan', 'hcmc'], 
     activeTabId: 't1',
     tabs: [
@@ -35,16 +55,18 @@ const DEFAULT_DATA = {
 };
 
 let appData = JSON.parse(localStorage.getItem('vibe_pro_data')) || DEFAULT_DATA;
+if (!appData.iconSize) appData.iconSize = 'medium'; 
+
 let currentOpenFolderId = null; 
 let contextTarget = null; 
 let dragState = { id: null, parentId: null, type: null };
 let weatherDataCache = {};
 
 /* -----------------------------------------
- * 2. 코어 유틸 (토스트 알림 및 보안 우회)
+ * 2. 코어 유틸 및 다이내믹 크기 조절
  * ----------------------------------------- */
-function saveData() { try { localStorage.setItem('vibe_pro_data', JSON.stringify(appData)); } catch (e) { showToast("저장 실패 (로컬 용량 초과)", true); } }
-function factoryReset() { if(confirm("모든 설정이 초기화됩니다. 계속할까요?")) { localStorage.removeItem('vibe_pro_data'); appData = JSON.parse(JSON.stringify(DEFAULT_DATA)); saveData(); goBack(); fetchWeathers(); } }
+function saveData() { try { localStorage.setItem('vibe_pro_data', JSON.stringify(appData)); } catch (e) { showToast("저장 실패 (용량 초과)", true); } }
+function factoryReset() { if(confirm("초기화하시겠습니까?")) { localStorage.removeItem('vibe_pro_data'); appData = JSON.parse(JSON.stringify(DEFAULT_DATA)); saveData(); goBack(); fetchWeathers(); } }
 
 function showToast(msg, isError = false) {
     const container = document.getElementById('toastContainer');
@@ -57,12 +79,6 @@ function showToast(msg, isError = false) {
     setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
 }
 
-function copyChromeUrl(url) { 
-    navigator.clipboard.writeText(url).then(() => {
-        showToast(`'${url}' 복사 완료! 새 탭(Ctrl+T)에서 붙여넣기 하세요.`);
-    }).catch(() => showToast("복사 실패. 수동으로 입력해주세요.", true)); 
-}
-
 function applyThemeAndBg() { 
     document.documentElement.style.setProperty('--bg-image', `url('${appData.bgUrl}')`); 
     if(appData.theme === 'light') { document.body.classList.add('light-mode'); document.getElementById('themeToggleBtn').innerHTML = '<i data-lucide="moon"></i>'; } 
@@ -71,59 +87,111 @@ function applyThemeAndBg() {
 function toggleTheme() { appData.theme = appData.theme === 'light' ? 'dark' : 'light'; saveData(); applyThemeAndBg(); lucide.createIcons(); }
 function getFaviconUrl(url) { try { return `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=128`; } catch(e) { return null; } }
 
+// 그리드 및 아이콘 크기 제어 함수 (이모지도 꽉 차게 폰트 크기 확대 적용)
+function applyIconSize() {
+    const root = document.documentElement;
+    if (appData.iconSize === 'small') {
+        root.style.setProperty('--grid-min-width', '80px');
+        root.style.setProperty('--icon-box-size', '50px');
+        root.style.setProperty('--icon-folder-font', '2rem');
+    } else if (appData.iconSize === 'large') {
+        root.style.setProperty('--grid-min-width', '140px');
+        root.style.setProperty('--icon-box-size', '90px');
+        root.style.setProperty('--icon-folder-font', '4.5rem');
+    } else { // medium (default)
+        root.style.setProperty('--grid-min-width', '110px');
+        root.style.setProperty('--icon-box-size', '70px');
+        root.style.setProperty('--icon-folder-font', '3.5rem');
+    }
+}
+
+function changeIconSize(event) {
+    appData.iconSize = event.target.value;
+    saveData();
+    applyIconSize();
+}
+
 /* -----------------------------------------
- * 3. 무제한 배경화면 (Picsum API)
+ * 3. 데이터 추출(백업)/복원 및 배경화면
  * ----------------------------------------- */
+function exportData() {
+    const dataStr = JSON.stringify(appData, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `vibe_backup_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    showToast("백업 완료!");
+}
+
+function importData(event) {
+    const file = event.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const importedData = JSON.parse(e.target.result);
+            if(importedData.tabs) { appData = importedData; saveData(); renderAll(); fetchWeathers(); showToast("복원 완료!"); closeModal('bgModal'); } 
+            else showToast("잘못된 파일", true);
+        } catch(err) { showToast("오류 발생", true); }
+        event.target.value = ''; 
+    }; reader.readAsText(file);
+}
+
+function importChromeBookmarks(event) {
+    const file = event.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const html = e.target.result; const parser = new DOMParser(); const doc = parser.parseFromString(html, "text/html");
+            const links = doc.querySelectorAll("a"); const newLinks = [];
+            links.forEach((a, idx) => { const url = a.href; if(url.startsWith("http")) newLinks.push({ type: 'link', id: 'l_imp_' + Date.now() + idx, title: a.textContent || "북마크", url }); });
+            if (newLinks.length > 0) {
+                const activeTab = appData.tabs.find(t => t.id === appData.activeTabId);
+                activeTab.items.push({ type: 'folder', id: 'f_imp_' + Date.now(), name: 'John Kim', emoji: '🚀', links: newLinks });
+                saveData(); renderMainGrid(); lucide.createIcons(); showToast(`John Kim 연동 완료!`); closeModal('bgModal');
+            } else showToast("북마크가 없습니다.", true);
+        } catch(err) { showToast("오류 발생", true); }
+        event.target.value = ''; 
+    }; reader.readAsText(file);
+}
+
 async function loadNextBgPage() {
-    const grid = document.getElementById('presetBgGrid');
-    grid.innerHTML = '<div class="loader"><i data-lucide="loader" class="spin"></i> 불러오는 중...</div>';
-    lucide.createIcons();
+    const grid = document.getElementById('presetBgGrid'); grid.innerHTML = '<div class="loader"><i data-lucide="loader" class="spin"></i> 불러오는 중...</div>'; lucide.createIcons();
     bgPage++;
     try {
-        const res = await fetch(`https://picsum.photos/v2/list?page=${bgPage}&limit=6`);
-        const data = await res.json();
-        grid.innerHTML = '';
+        const res = await fetch(`https://picsum.photos/v2/list?page=${bgPage}&limit=6`); const data = await res.json(); grid.innerHTML = '';
         data.forEach(imgData => {
-            const img = document.createElement('img');
-            img.src = `https://picsum.photos/id/${imgData.id}/400/200`; 
-            img.className = `preset-img ${appData.bgUrl === imgData.download_url ? 'active' : ''}`;
+            const img = document.createElement('img'); img.src = `https://picsum.photos/id/${imgData.id}/400/200`; img.className = `preset-img ${appData.bgUrl === imgData.download_url ? 'active' : ''}`;
             img.onclick = () => { appData.bgUrl = imgData.download_url; saveData(); applyThemeAndBg(); document.querySelectorAll('.preset-img').forEach(el=>el.classList.remove('active')); img.classList.add('active'); showToast("배경이 적용되었습니다.");};
             grid.appendChild(img);
         });
-    } catch (e) {
-        grid.innerHTML = '<div class="loader">이미지를 불러오는데 실패했습니다.</div>';
-    }
+    } catch (e) { grid.innerHTML = '<div class="loader">실패했습니다.</div>'; }
 }
-function handleFileUpload(event) { const file = event.target.files[0]; if(file) { const reader = new FileReader(); reader.onload = (e) => { try { appData.bgUrl = e.target.result; saveData(); applyThemeAndBg(); showToast("내 이미지 적용 완료!"); } catch(err) { showToast("용량이 너무 큽니다 (2MB 이하 권장).", true); } }; reader.readAsDataURL(file); } }
-function saveBackgroundUrl() { const url = document.getElementById('bgUrlInput').value.trim(); if(url) { appData.bgUrl = url; saveData(); applyThemeAndBg(); showToast("URL 배경 적용 완료!"); } }
+
+function handleFileUpload(event) { const file = event.target.files[0]; if(file) { const reader = new FileReader(); reader.onload = (e) => { try { appData.bgUrl = e.target.result; saveData(); applyThemeAndBg(); showToast("이미지 적용 완료!"); } catch(err) { showToast("용량 초과", true); } }; reader.readAsDataURL(file); } }
+function saveBackgroundUrl() { const url = document.getElementById('bgUrlInput').value.trim(); if(url) { appData.bgUrl = url; saveData(); applyThemeAndBg(); showToast("URL 배경 적용 완료!"); document.getElementById('bgUrlInput').value = ''; } }
 
 /* -----------------------------------------
- * 4. 인플레이스(In-place) 폴더 및 드래그 앤 드롭
+ * 5. 렌더링 및 인플레이스 폴더 / 드래그
  * ----------------------------------------- */
-function renderAll() { applyThemeAndBg(); renderTodos(); renderTabs(); renderMainGrid(); lucide.createIcons(); }
-
+function renderAll() { applyThemeAndBg(); applyIconSize(); renderTodos(); renderTabs(); renderMainGrid(); lucide.createIcons(); }
 function openFolderView(folderId) { currentOpenFolderId = folderId; renderMainGrid(); lucide.createIcons(); }
 function goBack() { currentOpenFolderId = null; renderMainGrid(); lucide.createIcons(); }
 
 function renderMainGrid() {
-    const grid = document.getElementById('mainGrid');
-    const folderHeader = document.getElementById('folderHeader');
-    const activeTab = appData.tabs.find(t => t.id === appData.activeTabId);
-    if(!activeTab) return;
+    const grid = document.getElementById('mainGrid'); const folderHeader = document.getElementById('folderHeader');
+    const activeTab = appData.tabs.find(t => t.id === appData.activeTabId); if(!activeTab) return;
     grid.innerHTML = '';
 
     if (currentOpenFolderId) {
         const folder = activeTab.items.find(i => i.id === currentOpenFolderId);
         folderHeader.style.display = 'flex'; document.getElementById('folderTitle').innerHTML = `${folder.emoji} ${folder.name}`;
-        if (folder.links.length === 0) grid.innerHTML = '<div style="grid-column: 1/-1; color: var(--text-sub); padding: 2rem;">폴더가 비어있습니다. 북마크를 추가하세요.</div>';
+        if (folder.links.length === 0) grid.innerHTML = '<div style="grid-column: 1/-1; color: var(--text-sub); padding: 2rem;">폴더가 비어있습니다.</div>';
         
         folder.links.forEach(link => {
-            const div = document.createElement('div'); div.className = 'item-card'; 
-            div.onclick = () => window.open(link.url, '_blank');
-            div.oncontextmenu = (e) => showContextMenu(e, 'link', link.id, folder.id);
-            attachDragEvents(div, link, folder.id);
+            const div = document.createElement('div'); div.className = 'item-card'; div.onclick = () => window.open(link.url, '_blank');
+            div.oncontextmenu = (e) => showContextMenu(e, 'link', link.id, folder.id); attachDragEvents(div, link, folder.id);
             const iconSrc = link.customIcon || getFaviconUrl(link.url);
-            div.innerHTML = `<div class="icon-box"><img src="${iconSrc}" class="favicon-img" onerror="this.style.display='none';"><i data-lucide="globe" style="display:none; width:28px;"></i></div><span class="item-title">${link.title}</span>`;
+            div.innerHTML = `<div class="icon-box"><img src="${iconSrc}" class="favicon-img" onerror="this.style.display='none';"><i data-lucide="globe" style="display:none;"></i></div><span class="item-title">${link.title}</span>`;
             grid.appendChild(div);
         });
     } else {
@@ -131,10 +199,9 @@ function renderMainGrid() {
         activeTab.items.forEach(item => {
             const div = document.createElement('div'); div.className = item.type === 'folder' ? 'item-card type-folder' : 'item-card';
             div.onclick = () => item.type === 'folder' ? openFolderView(item.id) : window.open(item.url, '_blank');
-            div.oncontextmenu = (e) => showContextMenu(e, item.type, item.id);
-            attachDragEvents(div, item, null);
+            div.oncontextmenu = (e) => showContextMenu(e, item.type, item.id); attachDragEvents(div, item, null);
             if(item.type === 'folder') div.innerHTML = `<div class="icon-box">${item.emoji || '📂'}</div><span class="item-title">${item.name}</span>`;
-            else { const iconSrc = item.customIcon || getFaviconUrl(item.url); div.innerHTML = `<div class="icon-box"><img src="${iconSrc}" class="favicon-img" onerror="this.style.display='none';"><i data-lucide="globe" style="display:none; width:28px;"></i></div><span class="item-title">${item.title}</span>`; }
+            else { const iconSrc = item.customIcon || getFaviconUrl(item.url); div.innerHTML = `<div class="icon-box"><img src="${iconSrc}" class="favicon-img" onerror="this.style.display='none';"><i data-lucide="globe" style="display:none;"></i></div><span class="item-title">${item.title}</span>`; }
             grid.appendChild(div);
         });
     }
@@ -142,21 +209,11 @@ function renderMainGrid() {
 
 function attachDragEvents(div, item, parentId) {
     div.draggable = true;
-    div.ondragstart = (e) => {
-        dragState = { id: item.id, parentId: parentId, type: item.type || 'link' };
-        e.dataTransfer.setData('text/plain', JSON.stringify(dragState)); div.classList.add('dragging');
-    };
+    div.ondragstart = (e) => { dragState = { id: item.id, parentId: parentId, type: item.type || 'link' }; e.dataTransfer.setData('text/plain', JSON.stringify(dragState)); div.classList.add('dragging'); };
     div.ondragend = () => { div.classList.remove('dragging'); document.querySelectorAll('.item-card').forEach(c => c.classList.remove('drag-over', 'drag-insert')); };
-    div.ondragover = (e) => {
-        e.preventDefault(); if (dragState.id === item.id) return;
-        if (!dragState.parentId && dragState.type === 'link' && item.type === 'folder') div.classList.add('drag-over'); 
-        else div.classList.add('drag-insert'); 
-    };
+    div.ondragover = (e) => { e.preventDefault(); if (dragState.id === item.id) return; if (!dragState.parentId && dragState.type === 'link' && item.type === 'folder') div.classList.add('drag-over'); else div.classList.add('drag-insert'); };
     div.ondragleave = () => div.classList.remove('drag-over', 'drag-insert');
-    div.ondrop = (e) => {
-        e.preventDefault(); div.classList.remove('drag-over', 'drag-insert');
-        handleDropLogic(dragState.id, dragState.parentId, item.id, parentId);
-    };
+    div.ondrop = (e) => { e.preventDefault(); div.classList.remove('drag-over', 'drag-insert'); handleDropLogic(dragState.id, dragState.parentId, item.id, parentId); };
 }
 
 function handleDropLogic(sourceId, sourceParentId, targetId, targetParentId) {
@@ -164,16 +221,13 @@ function handleDropLogic(sourceId, sourceParentId, targetId, targetParentId) {
     const activeTab = appData.tabs.find(t => t.id === appData.activeTabId);
     let sourceArray = sourceParentId ? activeTab.items.find(i => i.id === sourceParentId).links : activeTab.items;
     let targetArray = targetParentId ? activeTab.items.find(i => i.id === targetParentId).links : activeTab.items;
-
-    const sourceIndex = sourceArray.findIndex(i => i.id === sourceId);
-    if(sourceIndex === -1) return;
+    const sourceIndex = sourceArray.findIndex(i => i.id === sourceId); if(sourceIndex === -1) return;
     const targetItem = targetArray.find(i => i.id === targetId);
 
     if (!sourceParentId && !targetParentId && sourceArray[sourceIndex].type === 'link' && targetItem && targetItem.type === 'folder') {
-        const [movedItem] = sourceArray.splice(sourceIndex, 1); targetItem.links.push(movedItem); showToast("폴더로 이동되었습니다.");
+        const [movedItem] = sourceArray.splice(sourceIndex, 1); targetItem.links.push(movedItem); showToast("폴더로 이동됨");
     } else {
-        const [movedItem] = sourceArray.splice(sourceIndex, 1);
-        const freshTargetIndex = targetArray.findIndex(i => i.id === targetId);
+        const [movedItem] = sourceArray.splice(sourceIndex, 1); const freshTargetIndex = targetArray.findIndex(i => i.id === targetId);
         targetArray.splice(freshTargetIndex !== -1 ? freshTargetIndex : targetArray.length, 0, movedItem);
     }
     saveData(); renderMainGrid(); lucide.createIcons();
@@ -185,16 +239,15 @@ document.addEventListener('drop', (e) => {
     const url = e.dataTransfer.getData('URL') || e.dataTransfer.getData('text/uri-list');
     if (url && (url.startsWith('http') || url.startsWith('chrome'))) {
         e.preventDefault(); let title = url; try { title = new URL(url).hostname || url; } catch(err) {}
-        const newLink = { type: 'link', id: 'l' + Date.now(), title, url };
-        const activeTab = appData.tabs.find(t => t.id === appData.activeTabId);
+        const newLink = { type: 'link', id: 'l' + Date.now(), title, url }; const activeTab = appData.tabs.find(t => t.id === appData.activeTabId);
         if (currentOpenFolderId) activeTab.items.find(i => i.id === currentOpenFolderId).links.push(newLink); else activeTab.items.push(newLink);
-        saveData(); renderMainGrid(); lucide.createIcons(); showToast("북마크가 추가되었습니다.");
-        setTimeout(() => { const n = prompt("새 북마크 이름 수정:", title); if (n) { newLink.title = n; saveData(); renderMainGrid(); } }, 100);
+        saveData(); renderMainGrid(); lucide.createIcons(); showToast("북마크 추가됨");
+        setTimeout(() => { const n = prompt("새 북마크 이름:", title); if (n) { newLink.title = n; saveData(); renderMainGrid(); } }, 100);
     }
 });
 
 /* -----------------------------------------
- * 5. 기타 UI 로직 (탭, 우클릭, 모달)
+ * 6. UI 로직 (탭, 우클릭, 모달, 시계)
  * ----------------------------------------- */
 function renderTabs() {
     const nav = document.getElementById('tabsNav'); nav.innerHTML = '';
@@ -208,8 +261,7 @@ function renderTabs() {
 
 document.addEventListener('click', () => { document.getElementById('contextMenu').style.display = 'none'; });
 function showContextMenu(e, type, id, parentId = null) {
-    e.preventDefault(); contextTarget = { type, id, parentId };
-    const menu = document.getElementById('contextMenu'); menu.innerHTML = '';
+    e.preventDefault(); contextTarget = { type, id, parentId }; const menu = document.getElementById('contextMenu'); menu.innerHTML = '';
     if(type === 'tab') { menu.innerHTML += `<div class="context-menu-item" onclick="renameItem()"><i data-lucide="edit-2"></i> 이름 변경</div><div class="context-menu-item danger" onclick="deleteItem()"><i data-lucide="trash-2"></i> 삭제</div>`; } 
     else if (type === 'folder') { menu.innerHTML += `<div class="context-menu-item" onclick="renameItem()"><i data-lucide="edit-2"></i> 이름 변경</div><div class="context-menu-item" onclick="changeEmoji()"><i data-lucide="smile"></i> 이모지 변경</div><div class="context-menu-item danger" onclick="deleteItem()"><i data-lucide="trash-2"></i> 삭제</div>`; } 
     else if (type === 'link') { menu.innerHTML += `<div class="context-menu-item" onclick="renameItem()"><i data-lucide="edit-2"></i> 이름 변경</div><div class="context-menu-item" onclick="changeLinkIcon()"><i data-lucide="image"></i> 아이콘 변경</div><div class="context-menu-item danger" onclick="deleteItem()"><i data-lucide="trash-2"></i> 삭제</div>`; }
@@ -229,23 +281,22 @@ function deleteItem() { if(!confirm("정말 삭제하시겠습니까?")) return;
 
 function openModal(modalId) {
     document.getElementById(modalId).style.display = 'flex'; 
-    if(modalId === 'bgModal' && document.getElementById('presetBgGrid').innerHTML === '') loadNextBgPage(); 
+    if(modalId === 'bgModal') { 
+        document.getElementById('iconSizeSelect').value = appData.iconSize; 
+        if(document.getElementById('presetBgGrid').innerHTML === '') loadNextBgPage(); 
+    }
     if(modalId === 'cityModal') renderDynamicCityRows();
     setTimeout(() => { if(modalId === 'folderModal') document.getElementById('folderNameInput').focus(); if(modalId === 'bookmarkModal') document.getElementById('bmTitleInput').focus(); }, 100);
 }
 function closeModal(modalId) { document.getElementById(modalId).style.display = 'none'; if(modalId === 'folderModal') document.getElementById('folderNameInput').value = ''; if(modalId === 'bookmarkModal') { document.getElementById('bmTitleInput').value = ''; document.getElementById('bmUrlInput').value = 'https://'; } }
 function createFolder() { const name = document.getElementById('folderNameInput').value.trim(); if(!name) return; appData.tabs.find(t => t.id === appData.activeTabId).items.push({ type: 'folder', id: 'f' + Date.now(), name, emoji: '📂', links: [] }); saveData(); renderMainGrid(); closeModal('folderModal'); lucide.createIcons(); showToast("폴더 생성 완료"); }
-function createBookmark() { const title = document.getElementById('bmTitleInput').value.trim(); const url = document.getElementById('bmUrlInput').value.trim(); if(!title || !url || url === 'https://') return; const newLink = { type: 'link', id: 'l' + Date.now(), title, url }; const activeTab = appData.tabs.find(t => t.id === appData.activeTabId); if(currentOpenFolderId) activeTab.items.find(i => i.id === currentOpenFolderId).links.push(newLink); else activeTab.items.push(newLink); saveData(); renderMainGrid(); closeModal('bookmarkModal'); lucide.createIcons(); showToast("북마크 저장 완료"); }
+function createBookmark() { const title = document.getElementById('bmTitleInput').value.trim(); const url = document.getElementById('bmUrlInput').value.trim(); if(!title || !url || url === 'https://') return; const newLink = { type: 'link', id: 'l' + Date.now(), title, url }; const activeTab = appData.tabs.find(t => t.id === appData.activeTabId); if(currentOpenFolderId) activeTab.items.find(i => i.id === currentOpenFolderId).links.push(newLink); else activeTab.items.push(newLink); saveData(); renderMainGrid(); closeModal('bookmarkModal'); lucide.createIcons(); showToast("저장 완료"); }
 
-// 할일 로직
 function renderTodos() { const list = document.getElementById('todoList'); list.innerHTML = ''; appData.todos.forEach(todo => { const div = document.createElement('div'); div.className = `todo-item ${todo.done ? 'done' : ''}`; div.innerHTML = `<input type="checkbox" ${todo.done ? 'checked' : ''} onchange="toggleTodo('${todo.id}')"><span>${todo.text}</span><button class="btn-del" onclick="deleteTodo('${todo.id}')"><i data-lucide="trash-2"></i></button>`; list.appendChild(div); }); }
 function addTodo() { const input = document.getElementById('todoInput'); const text = input.value.trim(); if(!text) return; appData.todos.push({ id: 'td' + Date.now(), text, done: false }); input.value = ''; saveData(); renderTodos(); lucide.createIcons(); }
 function toggleTodo(id) { const todo = appData.todos.find(t => t.id === id); if(todo) { todo.done = !todo.done; saveData(); renderTodos(); lucide.createIcons(); } }
 function deleteTodo(id) { appData.todos = appData.todos.filter(t => t.id !== id); saveData(); renderTodos(); lucide.createIcons(); }
 
-/* -----------------------------------------
- * 6. 최대 10개 동적 시계 생성 로직
- * ----------------------------------------- */
 function updateClocks() {
     const now = new Date(); const container = document.getElementById('clocksContainer'); container.innerHTML = '';
     appData.selectedCities.forEach((cityId, index) => {
@@ -266,44 +317,19 @@ async function fetchWeathers() {
 
 function renderDynamicCityRows() {
     const container = document.getElementById('dynamicCityContainer'); container.innerHTML = '';
-    appData.selectedCities.forEach((cityId, index) => addCityRowHTML(container, cityId, index));
-    checkCityLimit(); lucide.createIcons();
+    appData.selectedCities.forEach((cityId, index) => addCityRowHTML(container, cityId, index)); checkCityLimit(); lucide.createIcons();
 }
-
 function addCityRowHTML(container, selectedId, index) {
     const row = document.createElement('div'); row.style.display = 'flex'; row.style.gap = '0.5rem'; row.style.alignItems = 'center';
     const select = document.createElement('select'); select.className = 'form-select city-dropdown';
-    
-    CITIES.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c.id; 
-        opt.textContent = c.name; 
-        if(c.id === selectedId) opt.selected = true; 
-        select.appendChild(opt);
-    });
-    
+    CITIES.forEach(c => { const opt = document.createElement('option'); opt.value = c.id; opt.textContent = c.name; if(c.id === selectedId) opt.selected = true; select.appendChild(opt); });
     row.appendChild(select);
-    if (index !== 0) { 
-        const delBtn = document.createElement('button'); delBtn.className = 'action-btn'; delBtn.style.padding = '0.6rem'; delBtn.innerHTML = '<i data-lucide="minus"></i>'; 
-        delBtn.onclick = () => { row.remove(); checkCityLimit(); }; 
-        row.appendChild(delBtn); 
-    }
+    if (index !== 0) { const delBtn = document.createElement('button'); delBtn.className = 'action-btn'; delBtn.style.padding = '0.6rem'; delBtn.innerHTML = '<i data-lucide="minus"></i>'; delBtn.onclick = () => { row.remove(); checkCityLimit(); }; row.appendChild(delBtn); }
     container.appendChild(row);
 }
-
-function addCitySelectRow() {
-    const container = document.getElementById('dynamicCityContainer');
-    if(container.children.length < 10) { addCityRowHTML(container, 'ny', container.children.length); checkCityLimit(); lucide.createIcons(); }
-}
-function checkCityLimit() {
-    const count = document.getElementById('dynamicCityContainer').children.length;
-    document.getElementById('btnAddCity').style.display = count >= 10 ? 'none' : 'flex';
-}
-function saveCities() {
-    const selects = document.querySelectorAll('.city-dropdown');
-    appData.selectedCities = Array.from(selects).map(s => s.value);
-    saveData(); updateClocks(); fetchWeathers(); closeModal('cityModal'); showToast("시간대 적용 완료");
-}
+function addCitySelectRow() { const container = document.getElementById('dynamicCityContainer'); if(container.children.length < 10) { addCityRowHTML(container, 'ny', container.children.length); checkCityLimit(); lucide.createIcons(); } }
+function checkCityLimit() { const count = document.getElementById('dynamicCityContainer').children.length; document.getElementById('btnAddCity').style.display = count >= 10 ? 'none' : 'flex'; }
+function saveCities() { const selects = document.querySelectorAll('.city-dropdown'); appData.selectedCities = Array.from(selects).map(s => s.value); saveData(); updateClocks(); fetchWeathers(); closeModal('cityModal'); showToast("시간대 적용 완료"); }
 
 setInterval(updateClocks, 1000); updateClocks(); fetchWeathers();
 renderAll();

@@ -11,13 +11,11 @@
 <body>
     <!-- 좌측 사이드바 -->
     <aside class="sidebar">
-        <!-- 멀티 시계 위젯 -->
         <div class="glass-panel time-widget" onclick="openModal('cityModal')" title="클릭하여 국가/도시 변경">
             <div id="clocksContainer" class="multi-clock-container"></div>
             <div class="add-city-hint"><i data-lucide="settings" style="width:12px;height:12px;"></i> 시간대 설정</div>
         </div>
         
-        <!-- 할 일 위젯 -->
         <div class="glass-panel" style="flex-grow: 1; display: flex; flex-direction: column;">
             <div class="todo-header">
                 <i data-lucide="check-square"></i> 오늘의 할 일
@@ -49,10 +47,11 @@
             <h2 id="folderTitle">폴더 이름</h2>
         </div>
 
+        <!-- 다이내믹 아이콘 그리드 -->
         <div class="grid-container" id="mainGrid"></div>
     </main>
 
-    <!-- 우측 퀵 사이드바 (불필요 버튼 삭제) -->
+    <!-- 우측 퀵 사이드바 -->
     <nav class="quick-sidebar">
         <button class="quick-btn" onclick="window.open('https://chromewebstore.google.com/', '_blank')" title="크롬 웹스토어">
             <i data-lucide="shopping-bag"></i>
@@ -66,7 +65,7 @@
         </button>
     </nav>
 
-    <!-- 팝업 및 유틸 -->
+    <!-- 유틸리티 -->
     <div id="contextMenu" class="context-menu"></div>
     <button class="btn-reset" onclick="factoryReset()" title="데이터 초기화"><i data-lucide="refresh-cw" style="width:14px; height:14px;"></i> 데이터 초기화</button>
     <div id="toastContainer" class="toast-container"></div>
@@ -105,28 +104,58 @@
         </div>
     </div>
 
-    <!-- 모달: 배경화면 커스텀 -->
+    <!-- 모달: 설정 및 데이터 연동/추출 -->
     <div class="modal-overlay" id="bgModal">
         <div class="modal" style="max-width: 500px;">
-            <h2><i data-lucide="image"></i> 배경화면 커스텀</h2>
+            <h2><i data-lucide="settings"></i> 대시보드 설정</h2>
+            
             <div class="input-group" style="margin-top: 1rem;">
-                <label><i data-lucide="upload-cloud" style="width:16px;vertical-align:middle;"></i> 내 PC 이미지 업로드 (최대 2MB)</label>
-                <input type="file" id="bgFileInput" accept="image/*" style="padding: 0.5rem; background: transparent; border: 1px dashed var(--glass-border); cursor: pointer;" onchange="handleFileUpload(event)">
+                <label><i data-lucide="layout-grid" style="width:16px;vertical-align:middle; margin-right:0.2rem;"></i> 아이콘 및 그리드 크기 배열</label>
+                <select id="iconSizeSelect" class="form-select" onchange="changeIconSize(event)">
+                    <option value="small">작게 (촘촘하게 여러 개 표시)</option>
+                    <option value="medium">보통 (기본값)</option>
+                    <option value="large">크게 (시원하게 표시)</option>
+                </select>
             </div>
+
+            <div class="input-group" style="margin-top: 1rem; padding: 1rem; background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 0.5rem;">
+                <label style="color: var(--text-main); font-weight: 600;"><i data-lucide="database" style="width:16px;vertical-align:middle; margin-right:0.2rem;"></i> 대시보드 데이터 백업</label>
+                <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+                    <button class="action-btn" onclick="exportData()" style="flex:1; justify-content:center; border-color: #10b981; color: #10b981;"><i data-lucide="download"></i> 데이터 추출</button>
+                    <button class="action-btn" onclick="document.getElementById('importJsonInput').click()" style="flex:1; justify-content:center;"><i data-lucide="upload"></i> 파일 복원</button>
+                    <input type="file" id="importJsonInput" accept=".json" style="display:none;" onchange="importData(event)">
+                </div>
+            </div>
+
             <div class="input-group" style="margin-top: 1rem;">
-                <label><i data-lucide="link" style="width:16px;vertical-align:middle;"></i> URL 직접 입력</label>
-                <div style="display:flex; gap:0.5rem;">
-                    <input type="text" id="bgUrlInput" placeholder="https://...">
+                <label><i data-lucide="chrome" style="width:16px;vertical-align:middle; margin-right:0.2rem;"></i> 크롬 북마크 가져오기 (John Kim 생성)</label>
+                <input type="file" id="bookmarkFileInput" accept=".html" style="padding: 0.5rem; background: transparent; border: 1px dashed var(--glass-border); cursor: pointer; margin-top: 0.5rem;" onchange="importChromeBookmarks(event)">
+            </div>
+
+            <hr style="border:0; border-top: 1px solid var(--glass-border); margin: 1.5rem 0;">
+            <h3 style="font-size:1.1rem; margin-bottom:1rem;"><i data-lucide="image"></i> 배경화면 설정</h3>
+
+            <div class="input-group" style="margin-top: 1rem; padding: 1rem; background: rgba(59, 130, 246, 0.05); border: 1px solid var(--accent); border-radius: 0.5rem;">
+                <label style="color: var(--text-main); font-weight: 600;"><i data-lucide="link" style="width:16px;vertical-align:middle; margin-right:0.2rem;"></i> URL로 붙여넣어 적용</label>
+                <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+                    <input type="text" id="bgUrlInput" placeholder="https:// (이미지 주소 붙여넣기)">
                     <button class="btn-base btn-save" onclick="saveBackgroundUrl()">적용</button>
                 </div>
             </div>
+
+            <div class="input-group" style="margin-top: 1rem;">
+                <label><i data-lucide="upload-cloud" style="width:16px;vertical-align:middle;"></i> 내 PC 이미지 업로드</label>
+                <input type="file" id="bgFileInput" accept="image/*" style="padding: 0.5rem; background: transparent; border: 1px dashed var(--glass-border); cursor: pointer;" onchange="handleFileUpload(event)">
+            </div>
+            
             <div class="input-group" style="margin-top: 1rem;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
                     <label style="margin:0;"><i data-lucide="star" style="width:16px;vertical-align:middle;"></i> 무제한 갤러리</label>
-                    <button class="action-btn" style="padding:0.3rem 0.6rem; font-size:0.8rem;" onclick="loadNextBgPage()"><i data-lucide="refresh-ccw" style="width:14px;"></i> 새로운 이미지</button>
+                    <button class="action-btn" style="padding:0.3rem 0.6rem; font-size:0.8rem;" onclick="loadNextBgPage()"><i data-lucide="refresh-ccw" style="width:14px;"></i> 다른 이미지 보기</button>
                 </div>
                 <div class="preset-grid" id="presetBgGrid"></div>
             </div>
+
             <div class="modal-actions" style="border-top: 1px solid var(--glass-border); padding-top: 1rem;">
                 <button class="btn-base btn-cancel" onclick="closeModal('bgModal')">닫기</button>
             </div>
@@ -137,16 +166,10 @@
     <div class="modal-overlay" id="cityModal">
         <div class="modal">
             <h2><i data-lucide="globe"></i> 국가 및 시간대 설정</h2>
-            <p style="font-size: 0.85rem; color: var(--text-sub); margin-bottom: 1rem;">글로벌 환경을 위해 최대 10개의 도시를 추가할 수 있습니다.</p>
-            
-            <div id="dynamicCityContainer" style="max-height: 250px; overflow-y: auto; padding-right: 5px; display: flex; flex-direction: column; gap: 0.5rem;">
-                <!-- JS에서 동적 렌더링 -->
-            </div>
-            
+            <div id="dynamicCityContainer" style="max-height: 250px; overflow-y: auto; padding-right: 5px; display: flex; flex-direction: column; gap: 0.5rem;"></div>
             <button class="action-btn" onclick="addCitySelectRow()" style="width: 100%; justify-content: center; margin-top: 1rem;" id="btnAddCity">
                 <i data-lucide="plus"></i> 도시 추가
             </button>
-
             <div class="modal-actions">
                 <button class="btn-base btn-cancel" onclick="closeModal('cityModal')">취소</button>
                 <button class="btn-base btn-save" onclick="saveCities()">적용</button>
@@ -154,6 +177,6 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script type="module" src="script.js"></script>
 </body>
 </html>
